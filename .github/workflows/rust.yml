@@ -6,7 +6,7 @@ on:
     paths:
       - Cargo.toml
       - Cargo.lock
-      - lapce-**
+      - copycat-**
 
 name: CI
 
@@ -29,11 +29,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Removed the failing Ubuntu dependency step.
-      #- name: Install dependencies on Ubuntu
-      #-   if: startsWith(matrix.os, 'ubuntu')
-      #-   run: sudo make ubuntu-deps
-
       - name: Update toolchain & add llvm-tools
         run: rustup update --no-self-update
 
@@ -49,16 +44,22 @@ jobs:
       - name: Run doc tests
         run: cargo test --doc --workspace
 
-      # Build a release binary for distribution.
       - name: Build release
         run: cargo build --release --frozen
 
-      # Upload the built release artifact.
-      - name: Upload release artifact
+      - name: Upload release artifact for Windows
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v3
+        with:
+          name: binary-windows
+          path: target/release/copycat.exe
+
+      - name: Upload release artifact for non-Windows
+        if: matrix.os != 'windows-latest'
         uses: actions/upload-artifact@v3
         with:
           name: binary-${{ matrix.os }}
-          path: target/release/${{ matrix.os == 'windows-latest' ? 'copycat.exe' : 'copycat' }}
+          path: target/release/copycat
 
   clippy:
     name: Clippy on ${{ matrix.os }}
@@ -75,11 +76,6 @@ jobs:
           rustup update --no-self-update
           rustup component add clippy
 
-      # Removed the failing Ubuntu dependency step.
-      #- name: Install dependencies on Ubuntu
-      #-   if: startsWith(matrix.os, 'ubuntu')
-      #-   run: sudo make ubuntu-deps
-
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
 
@@ -93,21 +89,17 @@ jobs:
     name: Create GitHub Release
     needs: build
     runs-on: ubuntu-latest
-    # Run this job only on tag pushes.
     if: startsWith(github.ref, 'refs/tags/')
     steps:
       - uses: actions/checkout@v4
 
-      # Download artifacts from all build jobs.
       - name: Download artifacts
         uses: actions/download-artifact@v3
         with:
           path: release-artifacts
 
-      # Create a GitHub Release and attach the built binaries.
       - name: Create Release
         uses: ncipollo/release-action@v1
         with:
           tag: ${{ github.ref }}
           files: release-artifacts/**/*
-
